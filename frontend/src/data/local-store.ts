@@ -20,7 +20,18 @@ function readStorage(): Record<string, EntryRow[]> {
   }
   try {
     const parsed = JSON.parse(raw) as Record<string, EntryRow[]>
-    return { ...fallback, ...parsed }
+    const merged = { ...fallback, ...parsed }
+    // 一次性迁移：旧版本竞品对标/留存分析是不可核查的占位文案，
+    // 检测到占位标记即用新种子升级这两个模块，保证基准映射能解析真实基准值与初始事件。
+    for (const key of ['benchmark', 'retention'] as const) {
+      const stale = (merged[key] ?? []).some((row) =>
+        Object.values(row).some((value) => typeof value === 'string' && value.includes(`${key === 'benchmark' ? '竞品对标' : '留存分析'}样例`)),
+      )
+      if (stale) {
+        merged[key] = clone(SEED_ROWS[key])
+      }
+    }
+    return merged
   } catch {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(fallback))
     return fallback
